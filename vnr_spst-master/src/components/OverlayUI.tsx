@@ -4,12 +4,11 @@ import { useState, useEffect } from "react";
 import { useStore } from "@/store/useStore";
 import { ROOMS, ARTIFACTS } from "@/data/museumData";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Play, Square, Volume2, VolumeX, Minus, Plus, HelpCircle, CheckCircle2, Moon, Sun, Award } from "lucide-react";
+import { X, Play, Square, Volume2, VolumeX, Minus, Plus, CheckCircle2, Moon, Sun, Award } from "lucide-react";
 import { soundFx } from "@/utils/soundEffects";
 
 export default function OverlayUI() {
   const [isListOpen, setIsListOpen] = useState(false);
-  const [activeHintId, setActiveHintId] = useState<string | null>(null);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
 
   const activeRoomId = useStore((state) => state.activeRoomId);
@@ -70,11 +69,6 @@ export default function OverlayUI() {
     else soundFx.playWoodClick();
   };
 
-  const handleHintClick = (artifactId: string, roomId: string) => {
-    if (!isMuted) soundFx.playWoodClick();
-    setActiveHintId(activeHintId === artifactId ? null : artifactId);
-    setActiveRoom(roomId);
-  };
 
   const handleRoomClick = (roomId: string) => {
     if (!isMuted) soundFx.playWhoosh();
@@ -135,24 +129,24 @@ export default function OverlayUI() {
                 transition={{ duration: 0.25 }}
                 className="max-h-72 overflow-y-auto divide-y divide-white/10 text-xs bg-black/40"
               >
+                {/* Danh sách này chỉ để theo dõi tiến độ. Không được tiết lộ hiện
+                    vật thuộc phòng nào - tìm ra phòng đúng chính là phần chơi. */}
                 {ARTIFACTS.map((artifact) => {
                   const isPlaced = placedIds.includes(artifact.id);
-                  const room = ROOMS.find((r) => r.id === artifact.roomId);
-                  const showHint = activeHintId === artifact.id;
 
                   return (
                     <div key={artifact.id} className="flex flex-col px-4 py-2.5 hover:bg-white/5 transition-colors">
-                      <div className="flex items-center justify-between gap-2">
-                        <div
-                          onClick={() => {
-                            if (isPlaced) {
-                              handleArtifactSelect(artifact.id, artifact.roomId);
-                            }
-                          }}
-                          className={`flex items-center gap-2 ${
-                            isPlaced ? "cursor-pointer text-gray-300" : "text-white font-medium"
-                          }`}
-                        >
+                      <div
+                        onClick={() => {
+                          if (isPlaced) {
+                            handleArtifactSelect(artifact.id, artifact.roomId);
+                          }
+                        }}
+                        className={`flex items-center justify-between gap-2 ${
+                          isPlaced ? "cursor-pointer text-gray-300" : "text-white font-medium"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
                           {isPlaced ? (
                             <CheckCircle2 size={13} className="text-green-500 shrink-0" />
                           ) : (
@@ -160,23 +154,10 @@ export default function OverlayUI() {
                           )}
                           <span>{artifact.title}</span>
                         </div>
-
-                        {!isPlaced && (
-                          <button
-                            onClick={() => handleHintClick(artifact.id, artifact.roomId)}
-                            className="flex items-center gap-1 text-[11px] text-yellow-400 hover:text-yellow-300 bg-yellow-500/10 hover:bg-yellow-500/20 px-2 py-1 rounded transition-colors shrink-0"
-                          >
-                            <HelpCircle size={11} />
-                            <span>Ở đâu?</span>
-                          </button>
-                        )}
+                        <span className="font-mono text-[11px] text-gray-500 shrink-0">
+                          {isPlaced ? "đã xếp" : "chưa xếp"}
+                        </span>
                       </div>
-
-                      {showHint && !isPlaced && (
-                        <div className="mt-1.5 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-[11px] text-yellow-200">
-                          💡 Hiện vật này thuộc <strong className="underline">{room?.name}</strong>. Sang phòng đó tìm bệ trống có gợi ý khớp với nó.
-                        </div>
-                      )}
                     </div>
                   );
                 })}
