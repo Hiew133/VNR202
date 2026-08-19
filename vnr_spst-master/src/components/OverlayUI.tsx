@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useStore } from "@/store/useStore";
 import { ROOMS, ARTIFACTS } from "@/data/museumData";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Play, Square, BookOpen, Volume2, VolumeX, Minus, Plus, HelpCircle, CheckCircle2, Moon, Sun, Award, Sparkles } from "lucide-react";
+import { X, Play, Square, Volume2, VolumeX, Minus, Plus, HelpCircle, CheckCircle2, Moon, Sun, Award } from "lucide-react";
 import { soundFx } from "@/utils/soundEffects";
 
 export default function OverlayUI() {
@@ -16,7 +16,6 @@ export default function OverlayUI() {
   const setActiveRoom = useStore((state) => state.setActiveRoom);
   const activeArtifactId = useStore((state) => state.activeArtifactId);
   const setActiveArtifact = useStore((state) => state.setActiveArtifact);
-  const visitedArtifactIds = useStore((state) => state.visitedArtifactIds);
   const isMuted = useStore((state) => state.isMuted);
   const toggleMute = useStore((state) => state.toggleMute);
   const isNightMode = useStore((state) => state.isNightMode);
@@ -27,22 +26,49 @@ export default function OverlayUI() {
   const isTourMode = useStore((state) => state.isTourMode);
   const setTourMode = useStore((state) => state.setTourMode);
 
+  const placedIds = useStore((state) => state.placedIds);
+  const openSlotId = useStore((state) => state.openSlotId);
+  const openSlot = useStore((state) => state.openSlot);
+  const tryPlace = useStore((state) => state.tryPlace);
+  const lastWrongId = useStore((state) => state.lastWrongId);
+  const clearWrong = useStore((state) => state.clearWrong);
+  const wrongAttempts = useStore((state) => state.wrongAttempts);
+
   const activeArtifact = activeArtifactId ? ARTIFACTS.find((a) => a.id === activeArtifactId) : null;
   const currentRoom = ROOMS.find((r) => r.id === activeRoomId) || ROOMS[0];
 
-  const allVisited = visitedArtifactIds.length === ARTIFACTS.length;
-  const formattedCounter = `${String(visitedArtifactIds.length).padStart(2, "0")}/${String(ARTIFACTS.length).padStart(2, "0")}`;
+  const allPlaced = placedIds.length === ARTIFACTS.length;
+  const formattedCounter = `${String(placedIds.length).padStart(2, "0")}/${String(ARTIFACTS.length).padStart(2, "0")}`;
+
+  // Bệ đang mở túi đồ, và danh sách hiện vật còn lại trong túi.
+  const openSlotArtifact = openSlotId ? ARTIFACTS.find((a) => a.id === openSlotId) : null;
+  const inventory = ARTIFACTS.filter((a) => !placedIds.includes(a.id));
+  const wrongArtifact = lastWrongId ? ARTIFACTS.find((a) => a.id === lastWrongId) : null;
 
   const [hasTriggeredAchievement, setHasTriggeredAchievement] = useState(false);
   useEffect(() => {
-    if (allVisited && !hasTriggeredAchievement) {
+    if (allPlaced && !hasTriggeredAchievement) {
       setHasTriggeredAchievement(true);
       setShowBadgeModal(true);
       if (!isMuted) {
         soundFx.playFireworks();
       }
     }
-  }, [allVisited, hasTriggeredAchievement, isMuted]);
+  }, [allPlaced, hasTriggeredAchievement, isMuted]);
+
+  // Thông báo đặt sai tự tắt sau 3 giây để không che mất danh sách.
+  useEffect(() => {
+    if (!lastWrongId) return;
+    const t = setTimeout(clearWrong, 3000);
+    return () => clearTimeout(t);
+  }, [lastWrongId, clearWrong]);
+
+  const handlePlace = (artifactId: string) => {
+    const ok = tryPlace(artifactId);
+    if (isMuted) return;
+    if (ok) soundFx.playBrassChime();
+    else soundFx.playWoodClick();
+  };
 
   const handleHintClick = (artifactId: string, roomId: string) => {
     if (!isMuted) soundFx.playWoodClick();
@@ -75,7 +101,15 @@ export default function OverlayUI() {
           <div className="flex items-center justify-between gap-3 p-3.5 border-b border-white/10">
             <div className="flex-1 text-xs md:text-sm font-medium leading-snug">
               <span>
-                Đây là không gian triển lãm <strong className="text-yellow-400">{currentRoom.name}</strong>. Hãy tìm đủ {ARTIFACTS.length} báu vật để khám phá nhé!
+                {allPlaced ? (
+                  <>
+                    <strong className="text-yellow-400">{currentRoom.name}</strong> đã trưng bày xong. Mời bạn tham quan!
+                  </>
+                ) : (
+                  <>
+                    Bạn là nhân viên sắp xếp của <strong className="text-yellow-400">{currentRoom.name}</strong>. Bấm vào bệ trống, đọc gợi ý rồi chọn đúng hiện vật trong túi đồ.
+                  </>
+                )}
               </span>
             </div>
             <button
@@ -102,7 +136,7 @@ export default function OverlayUI() {
                 className="max-h-72 overflow-y-auto divide-y divide-white/10 text-xs bg-black/40"
               >
                 {ARTIFACTS.map((artifact) => {
-                  const isVisited = visitedArtifactIds.includes(artifact.id);
+                  const isPlaced = placedIds.includes(artifact.id);
                   const room = ROOMS.find((r) => r.id === artifact.roomId);
                   const showHint = activeHintId === artifact.id;
 
@@ -111,36 +145,36 @@ export default function OverlayUI() {
                       <div className="flex items-center justify-between gap-2">
                         <div
                           onClick={() => {
-                            if (isVisited) {
+                            if (isPlaced) {
                               handleArtifactSelect(artifact.id, artifact.roomId);
                             }
                           }}
-                          className={`flex items-center gap-2 cursor-pointer ${
-                            isVisited ? "line-through text-gray-400 opacity-65" : "text-white font-medium"
+                          className={`flex items-center gap-2 ${
+                            isPlaced ? "cursor-pointer text-gray-300" : "text-white font-medium"
                           }`}
                         >
-                          {isVisited ? (
+                          {isPlaced ? (
                             <CheckCircle2 size={13} className="text-green-500 shrink-0" />
                           ) : (
-                            <span className="font-mono text-gray-400 font-bold">???</span>
+                            <span className="font-mono text-gray-500 font-bold shrink-0">○</span>
                           )}
-                          <span>{isVisited ? artifact.title : "???"}</span>
+                          <span>{artifact.title}</span>
                         </div>
 
-                        {!isVisited && (
+                        {!isPlaced && (
                           <button
                             onClick={() => handleHintClick(artifact.id, artifact.roomId)}
-                            className="flex items-center gap-1 text-[11px] text-yellow-400 hover:text-yellow-300 bg-yellow-500/10 hover:bg-yellow-500/20 px-2 py-1 rounded transition-colors"
+                            className="flex items-center gap-1 text-[11px] text-yellow-400 hover:text-yellow-300 bg-yellow-500/10 hover:bg-yellow-500/20 px-2 py-1 rounded transition-colors shrink-0"
                           >
                             <HelpCircle size={11} />
-                            <span>Gợi ý</span>
+                            <span>Ở đâu?</span>
                           </button>
                         )}
                       </div>
 
-                      {showHint && !isVisited && (
+                      {showHint && !isPlaced && (
                         <div className="mt-1.5 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-[11px] text-yellow-200">
-                          💡 <strong>Gợi ý:</strong> Nằm tại <strong className="underline">{room?.name}</strong>. Hãy di chuyển sang phòng này để tìm kiếm!
+                          💡 Hiện vật này thuộc <strong className="underline">{room?.name}</strong>. Sang phòng đó tìm bệ trống có gợi ý khớp với nó.
                         </div>
                       )}
                     </div>
@@ -148,7 +182,7 @@ export default function OverlayUI() {
                 })}
 
                 {/* All items unlocked congrats banner inside checklist */}
-                {allVisited && (
+                {allPlaced && (
                   <div
                     onClick={() => {
                       if (!isMuted) soundFx.playBrassChime();
@@ -157,7 +191,7 @@ export default function OverlayUI() {
                     className="p-3 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-300 text-center font-bold flex items-center justify-center gap-2 cursor-pointer hover:bg-yellow-500/30 transition-colors"
                   >
                     <Award size={16} />
-                    <span>Xem Bằng Chứng Nhận Sưu Tập Báu Vật (15/15)!</span>
+                    <span>Xem Bằng Chứng Nhận Hoàn Thành ({ARTIFACTS.length}/{ARTIFACTS.length})!</span>
                   </div>
                 )}
               </motion.div>
@@ -191,19 +225,23 @@ export default function OverlayUI() {
             })}
           </div>
 
-          {/* Tour Mode Toggle */}
-          <button
-            onClick={() => {
-              if (!isMuted) soundFx.playWoodClick();
-              setTourMode(!isTourMode);
-            }}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-full border border-white/10 text-xs font-semibold text-white transition-colors shadow-xl ${
-              isTourMode ? "bg-red-600 hover:bg-red-500" : "bg-blue-600 hover:bg-blue-500"
-            }`}
-          >
-            {isTourMode ? <Square size={14} /> : <Play size={14} />}
-            <span>{isTourMode ? "Dừng Tour" : "Bắt đầu Tour"}</span>
-          </button>
+          {/* Chế độ Tham quan chỉ mở sau khi đã xếp đủ hiện vật */}
+          {allPlaced && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={() => {
+                if (!isMuted) soundFx.playWoodClick();
+                setTourMode(!isTourMode);
+              }}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-full border border-white/10 text-xs font-semibold text-white transition-colors shadow-xl ${
+                isTourMode ? "bg-red-600 hover:bg-red-500" : "bg-blue-600 hover:bg-blue-500"
+              }`}
+            >
+              {isTourMode ? <Square size={14} /> : <Play size={14} />}
+              <span>{isTourMode ? "Dừng Tham Quan" : "Tham Quan"}</span>
+            </motion.button>
+          )}
 
           {/* Night Mode Toggle */}
           <button
@@ -231,9 +269,82 @@ export default function OverlayUI() {
         </motion.div>
       </div>
 
+      {/* Túi đồ - mở khi bấm vào một bệ còn trống */}
+      <AnimatePresence>
+        {openSlotArtifact && (
+          <motion.div
+            initial={{ opacity: 0, x: 80 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 80 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="pointer-events-auto absolute inset-x-4 md:inset-x-auto md:right-6 top-32 md:top-24 bottom-20 md:bottom-24 md:w-96 bg-black/85 md:backdrop-blur-xl border border-yellow-500/30 rounded-2xl text-white shadow-2xl flex flex-col z-40 overflow-hidden"
+          >
+            {/* Gợi ý của bệ đang chọn */}
+            <div className="p-5 border-b border-white/10 shrink-0">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <span className="px-3 py-1 bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 rounded-full font-mono text-[11px] font-bold uppercase tracking-wider">
+                  Bệ trưng bày trống
+                </span>
+                <button
+                  onClick={() => {
+                    if (!isMuted) soundFx.playWoodClick();
+                    openSlot(null);
+                  }}
+                  className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white shrink-0"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <p className="text-sm text-yellow-100 leading-relaxed font-serif">
+                💡 {openSlotArtifact.hint}
+              </p>
+            </div>
+
+            {/* Phản hồi khi đặt sai */}
+            <AnimatePresence>
+              {wrongArtifact && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="bg-red-900/40 border-b border-red-500/40 shrink-0"
+                >
+                  <p className="px-5 py-2.5 text-xs text-red-200 leading-relaxed">
+                    <strong>{wrongArtifact.title}</strong> ({wrongArtifact.year}) không khớp gợi ý này. Đọc lại mốc thời gian và thử món khác nhé.
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Danh sách hiện vật còn trong túi */}
+            <div className="px-5 pt-3 pb-1 text-[11px] uppercase tracking-widest text-gray-400 font-bold shrink-0">
+              Túi đồ · còn {inventory.length} hiện vật
+            </div>
+            <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1.5">
+              {inventory.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => handlePlace(item.id)}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors ${
+                    lastWrongId === item.id
+                      ? "bg-red-500/20 border-red-500/50"
+                      : "bg-white/5 border-white/10 hover:bg-yellow-500/15 hover:border-yellow-500/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium leading-snug">{item.title}</span>
+                    <span className="font-mono text-[11px] text-yellow-400/80 shrink-0">{item.year}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Artifact Details Side Modal */}
       <AnimatePresence>
-        {activeArtifact && (
+        {activeArtifact && !openSlotArtifact && (
           <motion.div
             initial={{ opacity: 0, x: 80 }}
             animate={{ opacity: 1, x: 0 }}
@@ -293,21 +404,41 @@ export default function OverlayUI() {
               </div>
 
               <h2 className="text-2xl font-bold font-serif text-yellow-300 mb-2">
-                BẮNG CHỨNG NHẬN HOÀN THÀNH
+                BẰNG CHỨNG NHẬN HOÀN THÀNH
               </h2>
               <p className="text-xs text-yellow-400/80 font-mono uppercase tracking-widest mb-4">
-                Bảo Tàng Lịch Sử Đảng Cộng Sản Việt Nam
+                Kháng Chiến Chống Pháp 1946 - 1954
               </p>
 
-              <p className="text-gray-300 text-sm mb-6 leading-relaxed">
-                Chúc mừng bạn đã xuất sắc tìm thấy và khám phá trọn vẹn <strong className="text-yellow-400">15/15 Báu Vật Lịch Sử</strong> quý giá!
+              <p className="text-gray-300 text-sm mb-4 leading-relaxed">
+                Bạn đã sắp xếp đúng trọn vẹn <strong className="text-yellow-400">{ARTIFACTS.length}/{ARTIFACTS.length} hiện vật</strong> vào đúng vị trí trưng bày của chúng!
               </p>
+
+              <div className="flex items-center justify-center gap-6 mb-6 text-xs">
+                <div>
+                  <div className="font-mono text-xl font-bold text-green-400">{ARTIFACTS.length}</div>
+                  <div className="text-gray-400 uppercase tracking-wider">Xếp đúng</div>
+                </div>
+                <div className="w-px h-8 bg-white/20" />
+                <div>
+                  <div className={`font-mono text-xl font-bold ${wrongAttempts === 0 ? "text-green-400" : "text-orange-400"}`}>
+                    {wrongAttempts}
+                  </div>
+                  <div className="text-gray-400 uppercase tracking-wider">Lần nhầm</div>
+                </div>
+              </div>
+
+              {wrongAttempts === 0 && (
+                <p className="text-xs text-yellow-300 mb-4 font-semibold">
+                  ⭐ Xuất sắc - không sai lần nào!
+                </p>
+              )}
 
               <button
                 onClick={() => setShowBadgeModal(false)}
                 className="w-full py-3 bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-400 hover:to-amber-500 text-black font-bold rounded-xl text-sm transition-all shadow-lg"
               >
-                Tiếp Tục Tham Quan
+                Bắt Đầu Tham Quan
               </button>
             </motion.div>
           </div>

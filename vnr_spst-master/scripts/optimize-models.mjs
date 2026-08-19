@@ -34,6 +34,25 @@ const MODELS = {
     simplifyRatio: 0.08,
     simplifyError: 0.005,
   },
+  // Tượng đài Bác đọc Tuyên ngôn Độc lập, sảnh chính. DetailedMonument.tsx tra
+  // cứu node theo tên (nodes.Material2, nodes.Material3) nên phải tắt
+  // flatten/join/instance/palette — các bước đó gộp và đổi tên node, tượng sẽ
+  // biến mất mà không báo lỗi. dropLines gỡ mesh viền của bản quét (~1 MB) mà
+  // component không render.
+  "tuong_bac.glb": {
+    simplifyRatio: 0.5,
+    simplifyError: 0.003,
+    dropLines: true,
+    extraArgs: [
+      "--flatten", "false",
+      "--join", "false",
+      "--instance", "false",
+      "--palette", "false",
+    ],
+  },
+  // Biểu tượng búa liềm, sảnh chính. Chỉ 444 tam giác nên không giảm lưới;
+  // toàn bộ trọng lượng nằm ở bộ texture 1024² (riêng normal map 1,26 MB).
+  "communist_badge.glb": { simplify: false, textureSize: 512 },
 };
 
 // Các tuỳ chọn khác mà `prepare()` hiểu, để dùng lại khi thêm model mới:

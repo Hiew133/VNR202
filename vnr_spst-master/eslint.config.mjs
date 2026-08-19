@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Kho lưu bản gốc và component đã gỡ khỏi bảo tàng - không phải mã đang chạy.
+    "assets-source/**",
   ]),
 ]);
 

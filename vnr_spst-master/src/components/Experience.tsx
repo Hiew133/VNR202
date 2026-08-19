@@ -5,10 +5,13 @@ import { CameraControls, Text, Float, Sparkles, MeshReflectorMaterial, Environme
 import { Suspense, useState, useRef, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { useStore } from "@/store/useStore";
-import { ARTIFACTS, ROOMS, ArtifactData } from "@/data/museumData";
+import { ARTIFACTS, ROOMS } from "@/data/museumData";
+import type { ArtifactData } from "@/data/museumData";
 
 import DetailedTypewriter from "./models/DetailedTypewriter";
 import DetailedPen from "./models/DetailedPen";
+import DetailedHammerSickle from "./models/DetailedHammerSickle";
+import DetailedMonument from "./models/DetailedMonument";
 
 import PostProcessingPipeline from "./PostProcessingPipeline";
 import "@/components/shaders/MarbleFloorShader";
@@ -391,23 +394,100 @@ function DocumentFrameWithImage({ url }: { url: string }) {
   );
 }
 
-function DocumentFrameWithoutImage({ title }: { title: string }) {
+/**
+ * Bìa văn kiện dựng bằng code cho những hiện vật chưa có ảnh tư liệu.
+ *
+ * Mục đích là để 8 văn kiện không còn là 8 khung nâu giống hệt nhau khi đứng
+ * cạnh nhau trong phòng. Mọi chi tiết đều suy ra từ dữ liệu hiện vật (màu, năm,
+ * id) nên mỗi bìa một khác mà không cần thêm asset nào.
+ */
+function DocumentFrameGenerated({ artifact }: { artifact: ArtifactData }) {
+  const { title, year, color, id } = artifact;
+
   const innerWidth = 1.5;
   const innerHeight = 2.1;
   const frameWidth = 1.8;
   const frameHeight = 2.4;
 
+  // Băm id thành một số ổn định để chọn biến thể - cùng hiện vật luôn ra cùng bìa.
+  const variant = useMemo(() => {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+    return {
+      seal: h % 3,          // kiểu con dấu
+      rules: 5 + (h % 4),   // số dòng kẻ giả lập chữ
+      tilt: ((h % 7) - 3) * 0.012, // nghiêng nhẹ cho đỡ đều tăm tắp
+    };
+  }, [id]);
+
+  const paper = "#f2e8d5";
+
   return (
-    <group rotation={[-Math.PI / 6, 0, 0]}>
+    <group rotation={[-Math.PI / 6, 0, variant.tilt]}>
+      {/* Khung gỗ */}
       <mesh castShadow receiveShadow position={[0, 0, -0.05]}>
         <boxGeometry args={[frameWidth, frameHeight, 0.1]} />
         <meshStandardMaterial color="#3a1f0b" roughness={0.8} />
       </mesh>
+
+      {/* Nền giấy */}
       <mesh position={[0, 0, 0.01]}>
-         <planeGeometry args={[innerWidth, innerHeight]} />
-         <meshStandardMaterial color="#f0e6d2" roughness={0.9} />
+        <planeGeometry args={[innerWidth, innerHeight]} />
+        <meshStandardMaterial color={paper} roughness={0.95} />
       </mesh>
-      <Text position={[0, 0, 0.02]} fontSize={0.12} color="#000" maxWidth={innerWidth * 0.8} textAlign="center">
+
+      {/* Dải màu đầu trang - thứ tạo khác biệt rõ nhất giữa các văn kiện */}
+      <mesh position={[0, innerHeight / 2 - 0.28, 0.02]}>
+        <planeGeometry args={[innerWidth, 0.42]} />
+        <meshStandardMaterial color={color} roughness={0.7} />
+      </mesh>
+      <mesh position={[0, innerHeight / 2 - 0.51, 0.02]}>
+        <planeGeometry args={[innerWidth, 0.02]} />
+        <meshStandardMaterial color="#8a6a2f" metalness={0.6} roughness={0.3} />
+      </mesh>
+
+      {/* Năm ban hành, in nổi trên dải màu */}
+      <Text
+        position={[0, innerHeight / 2 - 0.28, 0.03]}
+        fontSize={0.17}
+        color="#fdf6e3"
+        anchorX="center"
+        anchorY="middle"
+        letterSpacing={0.08}
+      >
+        {year}
+      </Text>
+
+      {/* Các dòng kẻ giả lập khối chữ trên văn kiện */}
+      {Array.from({ length: variant.rules }).map((_, i) => (
+        <mesh key={i} position={[0, 0.35 - i * 0.15, 0.02]}>
+          <planeGeometry args={[innerWidth * (i % 3 === 2 ? 0.5 : 0.78), 0.028]} />
+          <meshStandardMaterial color="#9c8b70" roughness={1} />
+        </mesh>
+      ))}
+
+      {/* Con dấu đỏ ở góc dưới */}
+      <mesh position={[innerWidth / 2 - 0.3, -innerHeight / 2 + 0.3, 0.02]} rotation={[0, 0, 0.3]}>
+        {variant.seal === 0 ? (
+          <ringGeometry args={[0.13, 0.17, 32]} />
+        ) : variant.seal === 1 ? (
+          <circleGeometry args={[0.15, 5]} />
+        ) : (
+          <ringGeometry args={[0.1, 0.17, 5]} />
+        )}
+        <meshStandardMaterial color="#a51c1c" roughness={0.8} transparent opacity={0.85} />
+      </mesh>
+
+      {/* Tên hiện vật ở chân trang, chữ nhỏ như dòng chú thích lưu trữ */}
+      <Text
+        position={[0, -innerHeight / 2 + 0.12, 0.02]}
+        fontSize={0.058}
+        color="#4a3520"
+        maxWidth={innerWidth * 0.85}
+        textAlign="center"
+        anchorX="center"
+        anchorY="middle"
+      >
         {title.toUpperCase()}
       </Text>
     </group>
@@ -415,10 +495,12 @@ function DocumentFrameWithoutImage({ title }: { title: string }) {
 }
 
 function ArtifactShape({ artifact }: { artifact: ArtifactData }) {
-  const { type, color, id, imageUrl, title } = artifact;
+  const { type, color, id, imageUrl } = artifact;
 
   switch (type) {
     case 'monument':
+      if (id === 'main-symbol') return <DetailedHammerSickle color={color} />;
+      if (id === 'tuong-dai-bac') return <DetailedMonument />;
       return (
         <mesh castShadow>
           <octahedronGeometry args={[1.2]} />
@@ -457,7 +539,7 @@ function ArtifactShape({ artifact }: { artifact: ArtifactData }) {
       if (imageUrl) {
         return <DocumentFrameWithImage url={imageUrl} />;
       }
-      return <DocumentFrameWithoutImage title={title} />;
+      return <DocumentFrameGenerated artifact={artifact} />;
     default:
       return (
         <mesh castShadow>
@@ -537,16 +619,31 @@ function PedestalArtifact({ artifact }: { artifact: ArtifactData }) {
   const [hovered, setHovered] = useState(false);
   const activeArtifactId = useStore((state) => state.activeArtifactId);
   const setActiveArtifact = useStore((state) => state.setActiveArtifact);
-  const visitedArtifactIds = useStore((state) => state.visitedArtifactIds);
+  const placedIds = useStore((state) => state.placedIds);
+  const openSlotId = useStore((state) => state.openSlotId);
+  const openSlot = useStore((state) => state.openSlot);
 
   const isSelected = activeArtifactId === artifact.id;
-  const isVisited = visitedArtifactIds.includes(artifact.id);
   const isMonument = artifact.type === 'monument';
+
+  // Bệ chỉ có hiện vật sau khi người chơi xếp đúng. Khi còn trống, biển đồng
+  // hiện gợi ý và bấm vào bệ sẽ mở túi đồ thay vì mở bảng chi tiết.
+  const isPlaced = placedIds.includes(artifact.id);
+  const isOpen = openSlotId === artifact.id;
+
+  const handleClick = (e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    if (isPlaced) {
+      setActiveArtifact(artifact.id);
+    } else {
+      openSlot(isOpen ? null : artifact.id);
+    }
+  };
 
   return (
     <group position={artifact.position}>
       {/* Cozy Golden Aura Ring on Hover or Selection */}
-      {(hovered || isSelected) && (
+      {(hovered || isSelected || isOpen) && (
         <mesh position={[0, isMonument ? 0.02 : -0.38, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[isMonument ? 4.2 : 1.25, isMonument ? 4.6 : 1.5, 64]} />
           <goldenAuraMaterial
@@ -586,19 +683,40 @@ function PedestalArtifact({ artifact }: { artifact: ArtifactData }) {
         <SteppedPodium position={[0, 0, 0]} />
       )}
 
-      {/* Artifact Mesh - Anchored firmly to podium/pedestal */}
-      <group 
+      {/* Vùng bấm của bệ. Luôn tồn tại kể cả khi chưa có hiện vật, nếu không
+          thì bệ trống sẽ không bấm vào đâu được để mở túi đồ. */}
+      <group
         position={[0, isMonument ? 0.6 : 0.8, 0]}
-        onClick={(e) => {
-          e.stopPropagation();
-          setActiveArtifact(artifact.id);
-        }}
+        onClick={handleClick}
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
       >
-        <group scale={hovered || isSelected ? 1.08 : 1}>
-           <ArtifactShape artifact={artifact} />
-        </group>
+        {isPlaced ? (
+          <group scale={hovered || isSelected ? 1.08 : 1}>
+            <ArtifactShape artifact={artifact} />
+          </group>
+        ) : (
+          <>
+            {/* Khối trong suốt để raycast bắt được cú bấm vào bệ trống */}
+            <mesh visible={false}>
+              <boxGeometry args={isMonument ? [3, 3, 3] : [1.6, 1.8, 1.6]} />
+            </mesh>
+            {/* Dấu hỏi lơ lửng báo đây là chỗ còn thiếu hiện vật */}
+            <Float speed={2} rotationIntensity={0.4} floatIntensity={0.5}>
+              <Text
+                position={[0, isMonument ? 0.6 : 0.25, 0]}
+                fontSize={isMonument ? 0.9 : 0.5}
+                color={isOpen || hovered ? "#ffd700" : "#8a7a5c"}
+                anchorX="center"
+                anchorY="middle"
+                outlineWidth={0.02}
+                outlineColor="#2a1a08"
+              >
+                ?
+              </Text>
+            </Float>
+          </>
+        )}
       </group>
 
       {/* Bảng Tên Khắc Đồng Kim Loại Nẹp Gụ (Luxury Museum Brass Plaque) */}
@@ -612,10 +730,15 @@ function PedestalArtifact({ artifact }: { artifact: ArtifactData }) {
           <meshStandardMaterial color="#1f140e" roughness={0.7} metalness={0.1} />
         </mesh>
         
-        {/* Mặt biển đồng mạ vàng bóng bẩy */}
+        {/* Mặt biển đồng mạ vàng bóng bẩy. Bệ trống thì để đồng xỉn màu, xếp
+            đúng rồi mới sáng lên - một tín hiệu tiến độ đọc được ngay trong cảnh. */}
         <mesh position={[0, 0, 0.018]}>
           <boxGeometry args={[1.22, 0.26, 0.01]} />
-          <meshStandardMaterial color="#c59b27" roughness={0.25} metalness={0.85} />
+          <meshStandardMaterial
+            color={isPlaced ? "#c59b27" : "#6b5a35"}
+            roughness={isPlaced ? 0.25 : 0.6}
+            metalness={0.85}
+          />
         </mesh>
         
         {/* Viền nổi mạ vàng sáng bóng xung quanh mặt biển */}
@@ -634,18 +757,19 @@ function PedestalArtifact({ artifact }: { artifact: ArtifactData }) {
           <meshStandardMaterial color="#4a3517" roughness={0.3} metalness={0.9} />
         </mesh>
 
-        {/* Chữ khắc kim loại sẫm màu sang trọng */}
+        {/* Bệ trống khắc gợi ý, xếp đúng rồi mới khắc tên thật của hiện vật.
+            Gợi ý dài hơn tên nên phải để cỡ chữ nhỏ hơn cho vừa mặt biển. */}
         <Text
           position={[0, 0, 0.026]}
-          fontSize={0.065}
-          color="#1a0f05"
+          fontSize={isPlaced ? 0.065 : 0.042}
+          color={isPlaced ? "#1a0f05" : "#2a2011"}
           anchorX="center"
           anchorY="middle"
           maxWidth={1.15}
           textAlign="center"
-          letterSpacing={0.05}
+          letterSpacing={isPlaced ? 0.05 : 0}
         >
-          {artifact.title.toUpperCase()}
+          {isPlaced ? artifact.title.toUpperCase() : artifact.hint}
         </Text>
       </group>
 

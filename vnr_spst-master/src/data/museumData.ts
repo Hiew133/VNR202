@@ -9,6 +9,12 @@ export interface ArtifactData {
   position: [number, number, number];
   color: string;
   type: 'document' | 'object' | 'flag' | 'monument';
+  /**
+   * Gợi ý hiện trên biển đồng khi bệ còn trống, dùng cho chế độ Nghiệp vụ.
+   * Phải mô tả đủ để người chơi nhận ra hiện vật nếu nắm nội dung bài, nhưng
+   * không được lộ tên - tên nằm trong danh sách túi đồ, đó mới là thứ phải chọn.
+   */
+  hint: string;
 }
 
 export interface RoomData {
@@ -75,6 +81,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [0, 1.5, 0],
     color: "#ffd700",
     type: "monument",
+    hint: "Biểu tượng khối liên minh công - nông, nền tảng của lực lượng kháng chiến toàn dân.",
   },
   {
     id: "tuong-dai-bac",
@@ -85,6 +92,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [0, 1.5, 18],
     color: "#e8d5b5",
     type: "monument",
+    hint: "Người đọc bản Tuyên ngôn khai sinh nước Việt Nam Dân chủ Cộng hòa tại Quảng trường Ba Đình.",
   },
 
   // ===== Phòng 1 (1946 - 1950): hình thành đường lối =====
@@ -97,6 +105,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [-22, 1, 18],
     color: "#e07a5f",
     type: "document",
+    hint: "Lời hiệu triệu viết tại Vạn Phúc, phát trên sóng phát thanh sáng 20/12/1946.",
     imageUrl: "/assets/images/loi_keu_goi.jpg",
   },
   {
@@ -108,6 +117,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [-26, 1, 12],
     color: "#d4a373",
     type: "document",
+    hint: "Văn kiện của Ban Thường vụ Trung ương, ra đời trước ngày toàn quốc kháng chiến một tuần.",
   },
   {
     id: "khang-chien-nhat-dinh-thang-loi",
@@ -118,6 +128,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [-18, 1, 12],
     color: "#c9ada7",
     type: "document",
+    hint: "Tác phẩm lý luận của Tổng Bí thư Trường Chinh, hoàn chỉnh đường lối kháng chiến năm 1947.",
   },
   {
     id: "may-chu-bac-ho",
@@ -128,6 +139,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [-22, 1, 6],
     color: "#4a4e69",
     type: "object",
+    hint: "Vật dụng đã soạn thảo hàng trăm chỉ thị tại An Toàn Khu Việt Bắc.",
   },
 
   // ===== Phòng 2 (1950 - 1953): giành quyền chủ động =====
@@ -140,6 +152,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [-16, 1, -20],
     color: "#8d99ae",
     type: "document",
+    hint: "Chiến dịch lớn đầu tiên ta chủ động mở, khai thông biên giới phía Bắc.",
   },
   {
     id: "dai-hoi-ii-1951",
@@ -150,6 +163,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [-8, 1, -20],
     color: "#cc0000",
     type: "document",
+    hint: "Đại hội đưa Đảng ra hoạt động công khai, họp tại Chiêm Hóa - Tuyên Quang.",
   },
   {
     id: "co-dang-lao-dong",
@@ -160,6 +174,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [0, 1, -24],
     color: "#cc0000",
     type: "flag",
+    hint: "Lá cờ mang tên gọi mà Đảng chính thức dùng từ năm 1951 đến 1976.",
   },
   {
     id: "chien-dich-tay-bac-1952",
@@ -170,6 +185,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [8, 1, -20],
     color: "#a3b18a",
     type: "document",
+    hint: "Chiến dịch cuối năm 1952 giải phóng Nghĩa Lộ và phần lớn tỉnh Sơn La.",
   },
   {
     id: "luat-cai-cach-ruong-dat",
@@ -180,6 +196,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [16, 1, -20],
     color: "#dda15e",
     type: "document",
+    hint: "Đạo luật hiện thực hóa khẩu hiệu 'người cày có ruộng', mặt trận kinh tế của kháng chiến.",
   },
 
   // ===== Phòng 3 (1953 - 1954): Điện Biên Phủ và Genève =====
@@ -192,6 +209,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [22, 1, 18],
     color: "#6c757d",
     type: "document",
+    hint: "Kế hoạch quân sự 18 tháng, canh bạc cuối cùng của thực dân Pháp ở Đông Dương.",
   },
   {
     id: "dong-xuan-1953-1954",
@@ -202,6 +220,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [26, 1, 12],
     color: "#bc6c25",
     type: "document",
+    hint: "Đòn phản công xé lẻ khối quân cơ động của địch ra khắp Đông Dương.",
   },
   {
     id: "co-quyet-thang",
@@ -212,6 +231,7 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [18, 1, 12],
     color: "#ff3300",
     type: "flag",
+    hint: "Vật tung bay trên nóc hầm tướng De Castries chiều 7/5/1954.",
     imageUrl: "/assets/images/co_quyet_chien.webp",
   },
   {
@@ -223,5 +243,6 @@ export const ARTIFACTS: ArtifactData[] = [
     position: [22, 1, 6],
     color: "#219ebc",
     type: "object",
+    hint: "Hiện vật biểu trưng cho thắng lợi trên bàn đàm phán, hai tháng sau Điện Biên Phủ.",
   },
 ];
