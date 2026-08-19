@@ -19,9 +19,20 @@ export interface ArtifactData {
 
 export interface RoomData {
   id: string;
+  /**
+   * Tên hiển thị khi phòng chưa xếp xong. Cố ý không mang thông tin niên đại:
+   * đoán ra phòng thuộc giai đoạn nào chính là phần chơi.
+   */
   name: string;
+  /**
+   * ĐÁP ÁN - theme, period và description chỉ được hiển thị sau khi người chơi
+   * xếp xong toàn bộ hiện vật của phòng.
+   * Đừng đưa ba trường này ra giao diện ở trạng thái chưa hoàn thành.
+   */
+  theme: string;
   period: string;
   description: string;
+
   cameraPosition: [number, number, number];
   targetPosition: [number, number, number];
   colorTheme: string;
@@ -35,6 +46,7 @@ export const ROOMS: RoomData[] = [
   {
     id: "main-hall",
     name: "Sảnh Chính Kim Liên",
+    theme: "Không gian biểu tượng",
     period: "Tổng Quan",
     description: "Không gian biểu tượng mở đầu hành trình tìm hiểu đường lối kháng chiến chống thực dân Pháp của Đảng Cộng sản Việt Nam.",
     cameraPosition: [0, 5.5, 28],
@@ -43,7 +55,8 @@ export const ROOMS: RoomData[] = [
   },
   {
     id: "room-1946",
-    name: "Phòng 1: Toàn Quốc Kháng Chiến",
+    name: "Phòng 1",
+    theme: "Toàn Quốc Kháng Chiến",
     period: "1946 - 1950",
     description: "Đường lối kháng chiến toàn dân, toàn diện, trường kỳ, tự lực cánh sinh được hình thành và hoàn chỉnh qua ba văn kiện nền tảng.",
     cameraPosition: [-22, 5.5, 28],
@@ -52,7 +65,8 @@ export const ROOMS: RoomData[] = [
   },
   {
     id: "room-1950",
-    name: "Phòng 2: Giành Quyền Chủ Động",
+    name: "Phòng 2",
+    theme: "Giành Quyền Chủ Động",
     period: "1950 - 1953",
     description: "Từ Chiến dịch Biên giới, ta chuyển từ thế phòng ngự sang chủ động tiến công, đồng thời đẩy mạnh kháng chiến trên mặt trận chính trị và kinh tế.",
     cameraPosition: [0, 5.5, -6],
@@ -61,7 +75,8 @@ export const ROOMS: RoomData[] = [
   },
   {
     id: "room-1954",
-    name: "Phòng 3: Điện Biên Phủ",
+    name: "Phòng 3",
+    theme: "Điện Biên Phủ",
     period: "1953 - 1954",
     description: "Chiến cuộc Đông Xuân và Chiến dịch Điện Biên Phủ đưa cuộc kháng chiến đến thắng lợi quyết định, buộc Pháp ký Hiệp định Genève.",
     cameraPosition: [22, 5.5, 28],
@@ -246,3 +261,18 @@ export const ARTIFACTS: ArtifactData[] = [
     hint: "Hiện vật biểu trưng cho thắng lợi trên bàn đàm phán, hai tháng sau Điện Biên Phủ.",
   },
 ];
+
+/**
+ * Sảnh chính là không gian biểu tượng, không phải phòng trưng bày theo giai đoạn.
+ * Hai hiện vật ở đây (búa liềm, tượng đài Bác) luôn được bày sẵn và đứng ngoài
+ * minigame - người chơi bước vào là thấy ngay, không phải xếp.
+ */
+export const SHOWCASE_ROOM_ID = "main-hall";
+
+/** Hiện vật người chơi phải tự xếp. Đây mới là mẫu số của bộ đếm tiến độ. */
+export const PLACEABLE_ARTIFACTS = ARTIFACTS.filter((a) => a.roomId !== SHOWCASE_ROOM_ID);
+
+/** Hiện vật bày sẵn từ đầu, coi như đã xếp xong ngay khi khởi động. */
+export const FIXED_ARTIFACT_IDS = ARTIFACTS
+  .filter((a) => a.roomId === SHOWCASE_ROOM_ID)
+  .map((a) => a.id);

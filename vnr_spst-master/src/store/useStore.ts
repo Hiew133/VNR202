@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ARTIFACTS, ROOMS } from '@/data/museumData';
+import { ARTIFACTS, ROOMS, PLACEABLE_ARTIFACTS, FIXED_ARTIFACT_IDS } from '@/data/museumData';
 import type { ArtifactData, RoomData } from '@/data/museumData';
 
 interface AppState {
@@ -57,14 +57,15 @@ export const useStore = create<AppState>((set, get) => ({
   zoomPercentage: 100,
   isTourMode: false,
 
-  placedIds: [],
+  // Hiện vật sảnh chính coi như đã bày sẵn ngay từ đầu.
+  placedIds: [...FIXED_ARTIFACT_IDS],
   openSlotId: null,
   lastWrongId: null,
   wrongAttempts: 0,
 
   getInventory: () => {
     const { placedIds } = get();
-    return ARTIFACTS.filter((a) => !placedIds.includes(a.id));
+    return PLACEABLE_ARTIFACTS.filter((a) => !placedIds.includes(a.id));
   },
 
   isAllPlaced: () => get().placedIds.length === ARTIFACTS.length,
@@ -95,7 +96,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   resetGame: () => {
     set({
-      placedIds: [],
+      placedIds: [...FIXED_ARTIFACT_IDS],
       openSlotId: null,
       lastWrongId: null,
       wrongAttempts: 0,

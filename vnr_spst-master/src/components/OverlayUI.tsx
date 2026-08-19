@@ -2,14 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { useStore } from "@/store/useStore";
-import { ROOMS, ARTIFACTS } from "@/data/museumData";
+import { ROOMS, ARTIFACTS, PLACEABLE_ARTIFACTS, SHOWCASE_ROOM_ID } from "@/data/museumData";
+import { MODEL_CREDITS } from "@/data/credits";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Play, Square, Volume2, VolumeX, Minus, Plus, CheckCircle2, Moon, Sun, Award } from "lucide-react";
+import { X, Play, Square, Volume2, VolumeX, Minus, Plus, CheckCircle2, Moon, Sun, Award, Info } from "lucide-react";
 import { soundFx } from "@/utils/soundEffects";
 
 export default function OverlayUI() {
   const [isListOpen, setIsListOpen] = useState(false);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
+  const [showCredits, setShowCredits] = useState(false);
 
   const activeRoomId = useStore((state) => state.activeRoomId);
   const setActiveRoom = useStore((state) => state.setActiveRoom);
@@ -36,12 +38,22 @@ export default function OverlayUI() {
   const activeArtifact = activeArtifactId ? ARTIFACTS.find((a) => a.id === activeArtifactId) : null;
   const currentRoom = ROOMS.find((r) => r.id === activeRoomId) || ROOMS[0];
 
-  const allPlaced = placedIds.length === ARTIFACTS.length;
-  const formattedCounter = `${String(placedIds.length).padStart(2, "0")}/${String(ARTIFACTS.length).padStart(2, "0")}`;
+  // Sảnh chính bày sẵn nên không tính vào tiến độ; mẫu số là số hiện vật phải xếp.
+  const placedCount = PLACEABLE_ARTIFACTS.filter((a) => placedIds.includes(a.id)).length;
+  const totalToPlace = PLACEABLE_ARTIFACTS.length;
+  const allPlaced = placedCount === totalToPlace;
+  const isShowcaseRoom = activeRoomId === SHOWCASE_ROOM_ID;
+  const formattedCounter = `${String(placedCount).padStart(2, "0")}/${String(totalToPlace).padStart(2, "0")}`;
+
+  // Xếp xong hết hiện vật của một phòng thì mới lộ giai đoạn của phòng đó -
+  // đoán ra phòng thuộc thời kỳ nào chính là phần chơi.
+  const roomSolved = ARTIFACTS
+    .filter((a) => a.roomId === activeRoomId)
+    .every((a) => placedIds.includes(a.id));
 
   // Bệ đang mở túi đồ, và danh sách hiện vật còn lại trong túi.
   const openSlotArtifact = openSlotId ? ARTIFACTS.find((a) => a.id === openSlotId) : null;
-  const inventory = ARTIFACTS.filter((a) => !placedIds.includes(a.id));
+  const inventory = PLACEABLE_ARTIFACTS.filter((a) => !placedIds.includes(a.id));
   const wrongArtifact = lastWrongId ? ARTIFACTS.find((a) => a.id === lastWrongId) : null;
 
   const [hasTriggeredAchievement, setHasTriggeredAchievement] = useState(false);
@@ -94,17 +106,22 @@ export default function OverlayUI() {
           {/* Header Bar inside Pill */}
           <div className="flex items-center justify-between gap-3 p-3.5 border-b border-white/10">
             <div className="flex-1 text-xs md:text-sm font-medium leading-snug">
-              <span>
-                {allPlaced ? (
-                  <>
-                    <strong className="text-yellow-400">{currentRoom.name}</strong> đã trưng bày xong. Mời bạn tham quan!
-                  </>
-                ) : (
-                  <>
-                    Bạn là nhân viên sắp xếp của <strong className="text-yellow-400">{currentRoom.name}</strong>. Bấm vào bệ trống, đọc gợi ý rồi chọn đúng hiện vật trong túi đồ.
-                  </>
-                )}
-              </span>
+              {isShowcaseRoom ? (
+                <span>
+                  <strong className="text-yellow-400">{currentRoom.name}</strong> đã bày sẵn. Sang Phòng 1, 2, 3 để bắt đầu sắp xếp hiện vật.
+                </span>
+              ) : roomSolved ? (
+                // Đáp án: giai đoạn của phòng, chỉ lộ ra khi đã xếp xong.
+                <span>
+                  <strong className="text-yellow-400">{currentRoom.name}</strong> hoàn thành —{" "}
+                  <strong className="text-yellow-400">{currentRoom.theme}</strong>{" "}
+                  <span className="font-mono text-yellow-500/90">({currentRoom.period})</span>
+                </span>
+              ) : (
+                <span>
+                  Bạn là nhân viên sắp xếp của <strong className="text-yellow-400">{currentRoom.name}</strong>. Xếp đủ hiện vật để biết phòng này thuộc giai đoạn nào.
+                </span>
+              )}
             </div>
             <button
               onClick={() => {
@@ -131,7 +148,7 @@ export default function OverlayUI() {
               >
                 {/* Danh sách này chỉ để theo dõi tiến độ. Không được tiết lộ hiện
                     vật thuộc phòng nào - tìm ra phòng đúng chính là phần chơi. */}
-                {ARTIFACTS.map((artifact) => {
+                {PLACEABLE_ARTIFACTS.map((artifact) => {
                   const isPlaced = placedIds.includes(artifact.id);
 
                   return (
@@ -172,7 +189,7 @@ export default function OverlayUI() {
                     className="p-3 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-300 text-center font-bold flex items-center justify-center gap-2 cursor-pointer hover:bg-yellow-500/30 transition-colors"
                   >
                     <Award size={16} />
-                    <span>Xem Bằng Chứng Nhận Hoàn Thành ({ARTIFACTS.length}/{ARTIFACTS.length})!</span>
+                    <span>Xem Bằng Chứng Nhận Hoàn Thành ({totalToPlace}/{totalToPlace})!</span>
                   </div>
                 )}
               </motion.div>
@@ -200,7 +217,7 @@ export default function OverlayUI() {
                       : "text-gray-400 hover:text-white hover:bg-white/10"
                   }`}
                 >
-                  {room.name.split(":")[0]}
+                  {room.name}
                 </button>
               );
             })}
@@ -392,12 +409,12 @@ export default function OverlayUI() {
               </p>
 
               <p className="text-gray-300 text-sm mb-4 leading-relaxed">
-                Bạn đã sắp xếp đúng trọn vẹn <strong className="text-yellow-400">{ARTIFACTS.length}/{ARTIFACTS.length} hiện vật</strong> vào đúng vị trí trưng bày của chúng!
+                Bạn đã sắp xếp đúng trọn vẹn <strong className="text-yellow-400">{totalToPlace}/{totalToPlace} hiện vật</strong> vào đúng vị trí trưng bày của chúng!
               </p>
 
               <div className="flex items-center justify-center gap-6 mb-6 text-xs">
                 <div>
-                  <div className="font-mono text-xl font-bold text-green-400">{ARTIFACTS.length}</div>
+                  <div className="font-mono text-xl font-bold text-green-400">{totalToPlace}</div>
                   <div className="text-gray-400 uppercase tracking-wider">Xếp đúng</div>
                 </div>
                 <div className="w-px h-8 bg-white/20" />
@@ -456,8 +473,96 @@ export default function OverlayUI() {
           >
             <Plus size={14} />
           </button>
+
+          <div className="w-px h-4 bg-white/20" />
+
+          {/* Giấy phép CC BY của các mô hình 3D bắt buộc phải ghi công tác giả,
+              nên lối vào bảng nguồn phải luôn hiện diện. */}
+          <button
+            onClick={() => {
+              if (!isMuted) soundFx.playWoodClick();
+              setShowCredits(true);
+            }}
+            className="p-1 hover:text-yellow-400 transition-colors text-gray-300"
+            title="Nguồn tư liệu và bản quyền"
+          >
+            <Info size={14} />
+          </button>
         </motion.div>
       </div>
+
+      {/* Bảng nguồn tư liệu */}
+      <AnimatePresence>
+        {showCredits && (
+          <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 md:backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gradient-to-b from-gray-900 to-black border border-yellow-500/40 rounded-2xl max-w-lg w-full max-h-[80vh] flex flex-col text-white shadow-2xl overflow-hidden"
+            >
+              <div className="flex items-center justify-between gap-3 p-5 border-b border-white/10 shrink-0">
+                <div>
+                  <h2 className="text-lg font-bold font-serif text-yellow-300">Nguồn Tư Liệu</h2>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Mô hình 3D dùng theo giấy phép Creative Commons
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowCredits(false)}
+                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors shrink-0"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                {MODEL_CREDITS.map((c) => (
+                  <div key={c.sourceUrl} className="text-xs leading-relaxed">
+                    <div className="text-yellow-200 font-semibold mb-1">{c.usedFor}</div>
+                    <div className="text-gray-300">
+                      <a
+                        href={c.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-yellow-400"
+                      >
+                        &ldquo;{c.title}&rdquo;
+                      </a>
+                      {" của "}
+                      <a
+                        href={c.authorUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-yellow-400"
+                      >
+                        {c.author}
+                      </a>
+                      {", giấy phép "}
+                      <a
+                        href={c.licenseUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-yellow-400"
+                      >
+                        {c.license}
+                      </a>
+                      .
+                    </div>
+                    <div className="text-gray-500 mt-1 italic">Đã sửa đổi: {c.modifications}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-4 border-t border-white/10 shrink-0">
+                <p className="text-[11px] text-gray-400 leading-relaxed">
+                  Ảnh tư liệu lịch sử trong bảo tàng thuộc về các cơ quan lưu trữ, sử dụng cho mục đích học tập phi lợi nhuận.
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
