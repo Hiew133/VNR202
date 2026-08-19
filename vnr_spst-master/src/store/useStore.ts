@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { ARTIFACTS, ROOMS, PLACEABLE_ARTIFACTS, FIXED_ARTIFACT_IDS } from '@/data/museumData';
 import type { ArtifactData, RoomData } from '@/data/museumData';
 
+/** Thời gian khoá màn hình sau mỗi lần đặt sai hiện vật. */
+export const WRONG_LOCK_MS = 10_000;
+
 interface AppState {
   activeRoomId: string;
   activeArtifactId: string | null;
@@ -23,6 +26,11 @@ interface AppState {
   lastWrongId: string | null;
   /** Số lần đặt sai, hiện ở bảng tổng kết. */
   wrongAttempts: number;
+  /**
+   * Thời điểm (epoch ms) hết hạn khoá màn hình sau khi đặt sai. 0 = không khoá.
+   * Đặt sai bị treo một lúc để người chơi phải cân nhắc thay vì thử vét cạn.
+   */
+  lockedUntil: number;
 
   // Computed getters
   getCurrentRoom: () => RoomData;
@@ -62,6 +70,7 @@ export const useStore = create<AppState>((set, get) => ({
   openSlotId: null,
   lastWrongId: null,
   wrongAttempts: 0,
+  lockedUntil: 0,
 
   getInventory: () => {
     const { placedIds } = get();
@@ -80,7 +89,11 @@ export const useStore = create<AppState>((set, get) => ({
 
     // Mỗi hiện vật chỉ khớp đúng bệ mang id của chính nó.
     if (artifactId !== openSlotId) {
-      set({ lastWrongId: artifactId, wrongAttempts: wrongAttempts + 1 });
+      set({
+        lastWrongId: artifactId,
+        wrongAttempts: wrongAttempts + 1,
+        lockedUntil: Date.now() + WRONG_LOCK_MS,
+      });
       return false;
     }
 
@@ -100,6 +113,7 @@ export const useStore = create<AppState>((set, get) => ({
       openSlotId: null,
       lastWrongId: null,
       wrongAttempts: 0,
+      lockedUntil: 0,
       visitedArtifactIds: [],
       activeArtifactId: null,
       isTourMode: false,

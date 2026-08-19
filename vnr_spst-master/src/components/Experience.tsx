@@ -12,6 +12,23 @@ import DetailedTypewriter from "./models/DetailedTypewriter";
 import DetailedPen from "./models/DetailedPen";
 import DetailedHammerSickle from "./models/DetailedHammerSickle";
 import DetailedMonument from "./models/DetailedMonument";
+import ArtifactModel from "./models/ArtifactModel";
+
+/**
+ * Hiện vật nào dùng model tải về, và hiển thị ở cỡ nào.
+ * targetSize là cạnh dài nhất sau khi chuẩn hoá - bệ rộng 1.5 nên khoảng 1.0-1.3
+ * là vừa; xe tăng để lớn hơn cho ra dáng hiện vật cỡ lớn.
+ */
+const ARTIFACT_MODELS: Record<string, { url: string; targetSize?: number; rotation?: [number, number, number] }> = {
+  "tong-tuyen-cu-1946": { url: "/assets/models/ballot_box.glb", targetSize: 1.0 },
+  "den-dau-chien-khu": { url: "/assets/models/oil_lamp.glb", targetSize: 1.1 },
+  "sung-ppsh": { url: "/assets/models/ppsh41.glb", targetSize: 1.3, rotation: [0, Math.PI / 5, 0] },
+  "xe-tang-m24": { url: "/assets/models/m24_chaffee.glb", targetSize: 1.8, rotation: [0, Math.PI / 5, 0] },
+  "may-bay-c47": { url: "/assets/models/c47.glb", targetSize: 1.9, rotation: [0, -Math.PI / 6, 0] },
+  "dien-thoai-da-chien": { url: "/assets/models/field_telephone.glb", targetSize: 1.1 },
+  "bi-dong-bo-doi": { url: "/assets/models/military_canteen.glb", targetSize: 0.9 },
+  "xeng-dao-hao": { url: "/assets/models/shovel.glb", targetSize: 1.3, rotation: [0, Math.PI / 4, 0] },
+};
 
 import PostProcessingPipeline from "./PostProcessingPipeline";
 import "@/components/shaders/MarbleFloorShader";
@@ -403,6 +420,7 @@ function DocumentFrameWithImage({ url }: { url: string }) {
  */
 function DocumentFrameGenerated({ artifact }: { artifact: ArtifactData }) {
   const { title, year, color, id } = artifact;
+  const allPlaced = useStore((state) => state.isAllPlaced());
 
   const innerWidth = 1.5;
   const innerHeight = 2.1;
@@ -446,7 +464,9 @@ function DocumentFrameGenerated({ artifact }: { artifact: ArtifactData }) {
         <meshStandardMaterial color="#8a6a2f" metalness={0.6} roughness={0.3} />
       </mesh>
 
-      {/* Năm ban hành, in nổi trên dải màu */}
+      {/* Năm ban hành, in nổi trên dải màu. Bị che tới khi xếp xong toàn bộ bảo
+          tàng: đọc được mốc thời gian ngay trong cảnh là suy ra luôn phòng đó
+          thuộc giai đoạn nào, hỏng phần chơi. */}
       <Text
         position={[0, innerHeight / 2 - 0.28, 0.03]}
         fontSize={0.17}
@@ -455,7 +475,7 @@ function DocumentFrameGenerated({ artifact }: { artifact: ArtifactData }) {
         anchorY="middle"
         letterSpacing={0.08}
       >
-        {year}
+        {allPlaced ? year : "??"}
       </Text>
 
       {/* Các dòng kẻ giả lập khối chữ trên văn kiện */}
@@ -507,15 +527,29 @@ function ArtifactShape({ artifact }: { artifact: ArtifactData }) {
           <meshStandardMaterial color={color} metalness={1} roughness={0.1} emissive={color} emissiveIntensity={0.2} />
         </mesh>
       );
-    case 'object':
+    case 'object': {
       if (id === 'may-chu-bac-ho') return <DetailedTypewriter />;
       if (id === 'but-ky-geneve') return <DetailedPen />;
+      // Các hiện vật dùng model tải về đều đi qua ArtifactModel, nó tự chuẩn
+      // hoá tỉ lệ nên chỉ cần khai báo đường dẫn và cỡ hiển thị mong muốn.
+      const model = ARTIFACT_MODELS[id];
+      if (model) {
+        // Suspense riêng cho từng model. Cảnh chỉ có một Suspense bọc ngoài
+        // cùng, nên nếu không chặn ở đây thì lúc người chơi xếp một hiện vật,
+        // model tải về sẽ làm treo cả bảo tàng chứ không riêng bệ đó.
+        return (
+          <Suspense fallback={null}>
+            <ArtifactModel {...model} />
+          </Suspense>
+        );
+      }
       return (
         <mesh castShadow>
           <boxGeometry args={[1, 1, 1]} />
           <meshStandardMaterial color={color} roughness={0.5} />
         </mesh>
       );
+    }
     case 'flag':
       return (
         <group>
@@ -629,6 +663,7 @@ function PedestalArtifact({ artifact }: { artifact: ArtifactData }) {
   // Bệ chỉ có hiện vật sau khi người chơi xếp đúng. Khi còn trống, biển đồng
   // hiện gợi ý và bấm vào bệ sẽ mở túi đồ thay vì mở bảng chi tiết.
   const isPlaced = placedIds.includes(artifact.id);
+  const allPlaced = useStore((state) => state.isAllPlaced());
   const isOpen = openSlotId === artifact.id;
 
   const handleClick = (e: { stopPropagation: () => void }) => {
@@ -760,8 +795,8 @@ function PedestalArtifact({ artifact }: { artifact: ArtifactData }) {
         {/* Bệ trống khắc gợi ý, xếp đúng rồi mới khắc tên thật của hiện vật.
             Gợi ý dài hơn tên nên phải để cỡ chữ nhỏ hơn cho vừa mặt biển. */}
         <Text
-          position={[0, 0, 0.026]}
-          fontSize={isPlaced ? 0.065 : 0.042}
+          position={[0, allPlaced && isPlaced ? 0.035 : 0, 0.026]}
+          fontSize={isPlaced ? 0.062 : 0.042}
           color={isPlaced ? "#1a0f05" : "#2a2011"}
           anchorX="center"
           anchorY="middle"
@@ -771,6 +806,23 @@ function PedestalArtifact({ artifact }: { artifact: ArtifactData }) {
         >
           {isPlaced ? artifact.title.toUpperCase() : artifact.hint}
         </Text>
+
+        {/* Niên đại khắc thêm dưới tên, chỉ hiện khi đã xếp xong toàn bộ bảo
+            tàng - nhìn quanh phòng là đọc ra khoảng thời gian của cả phòng. */}
+        {allPlaced && isPlaced && (
+          <Text
+            position={[0, -0.072, 0.026]}
+            fontSize={0.05}
+            color="#5a3d12"
+            anchorX="center"
+            anchorY="middle"
+            maxWidth={1.15}
+            textAlign="center"
+            letterSpacing={0.04}
+          >
+            {artifact.year}
+          </Text>
+        )}
       </group>
 
       {/* Đèn chiếu rọi riêng cho từng hiện vật (treo từ trần nhà xuống) */}

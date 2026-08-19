@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import OverlayUI from "@/components/OverlayUI";
+import DevtoolsGuard from "@/components/DevtoolsGuard";
 
 const Experience = dynamic(() => import("@/components/Experience"), {
   ssr: false,
@@ -15,6 +16,7 @@ const Experience = dynamic(() => import("@/components/Experience"), {
 export default function Home() {
   return (
     <main className="relative w-screen h-screen bg-[#050505]">
+      <DevtoolsGuard />
       <OverlayUI />
       <Experience />
     </main>

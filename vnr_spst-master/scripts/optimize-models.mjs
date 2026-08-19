@@ -10,7 +10,7 @@
 // --texture-compress của gltf-transform (xem lý do tại prepare()).
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { NodeIO } from "@gltf-transform/core";
@@ -53,6 +53,28 @@ const MODELS = {
   // Biểu tượng búa liềm, sảnh chính. Chỉ 444 tam giác nên không giảm lưới;
   // toàn bộ trọng lượng nằm ở bộ texture 1024² (riêng normal map 1,26 MB).
   "communist_badge.glb": { simplify: false, textureSize: 512 },
+
+  // ===== Phòng 1: 1945 - 1946 =====
+  // Thùng phiếu Tổng tuyển cử 6/1/1946. Vốn đã rất nhẹ (1.254 mặt).
+  ballot_box: { simplify: false, textureSize: 512 },
+
+  // ===== Phòng 3: 1946 - 1950 =====
+  // Điện thoại dã chiến. Bản gốc kèm cả mặt đất và texture 4K.
+  field_telephone: { simplifyRatio: 0.5, simplifyError: 0.003, textureSize: 512 },
+  // Đèn dầu chiến khu.
+  oil_lamp: { simplifyRatio: 0.5, simplifyError: 0.003, textureSize: 512 },
+  // Bi đông bộ đội.
+  military_canteen: { simplifyRatio: 0.4, simplifyError: 0.004, textureSize: 512 },
+
+  // ===== Phòng 2: 1951 - 1954 =====
+  // Xe tăng M24 Chaffee - hiện vật lớn, giữ nhiều chi tiết hơn.
+  m24_chaffee: { simplifyRatio: 0.6, simplifyError: 0.002, textureSize: 1024 },
+  // Máy bay C-47. Bản gốc nhẹ sẵn, texture nhỏ.
+  c47: { simplifyRatio: 0.7, simplifyError: 0.002, textureSize: 1024 },
+  // Tiểu liên PPSh-41.
+  ppsh41: { simplifyRatio: 0.4, simplifyError: 0.003, textureSize: 512 },
+  // Xẻng đào hào.
+  shovel: { simplifyRatio: 0.3, simplifyError: 0.004, textureSize: 512 },
 };
 
 // Các tuỳ chọn khác mà `prepare()` hiểu, để dùng lại khi thêm model mới:
@@ -106,14 +128,25 @@ async function prepare(input, config) {
     for (const texture of doc.getRoot().listTextures()) {
       const image = texture.getImage();
       if (!image) continue;
-      let pipeline = sharp(Buffer.from(image)).resize(size, size, {
+
+      const buf = Buffer.from(image);
+      // PNG chỉ đáng giữ khi thật sự cần kênh alpha. Các map normal /
+      // metallicRoughness / occlusion đều đục, mà lưu PNG thì nặng gấp nhiều
+      // lần JPEG cùng kích thước - đây là phần chiếm dung lượng lớn nhất của
+      // các model tải từ Sketchfab.
+      const meta = await sharp(buf).metadata();
+      const keepPng = texture.getMimeType() === "image/png" && meta.hasAlpha;
+
+      let pipeline = sharp(buf).resize(size, size, {
         fit: "inside",
         withoutEnlargement: true,
       });
-      pipeline =
-        texture.getMimeType() === "image/jpeg"
-          ? pipeline.jpeg({ quality: 88 })
-          : pipeline.png({ compressionLevel: 9 });
+      if (keepPng) {
+        pipeline = pipeline.png({ compressionLevel: 9 });
+      } else {
+        pipeline = pipeline.jpeg({ quality: 88, mozjpeg: true });
+        texture.setMimeType("image/jpeg");
+      }
       texture.setImage(new Uint8Array(await pipeline.toBuffer()));
     }
   }
@@ -123,15 +156,48 @@ async function prepare(input, config) {
   return temp;
 }
 
-for (const file of readdirSync(SRC_DIR).filter((f) => f.endsWith(".glb"))) {
-  const config = MODELS[file];
+/**
+ * Liệt kê bản gốc. Chấp nhận hai dạng:
+ *   - một file .glb
+ *   - một thư mục chứa scene.gltf (đúng dạng Sketchfab xuất ra khi chọn glTF:
+ *     scene.gltf + scene.bin + textures/), khoá cấu hình là tên thư mục
+ * Trả về { key, sourcePath, outName }.
+ */
+function listSources() {
+  const out = [];
+  for (const entry of readdirSync(SRC_DIR, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith(".glb")) {
+      out.push({ key: entry.name, sourcePath: join(SRC_DIR, entry.name), outName: entry.name });
+    } else if (entry.isDirectory()) {
+      const gltf = join(SRC_DIR, entry.name, "scene.gltf");
+      if (existsSync(gltf)) {
+        out.push({ key: entry.name, sourcePath: gltf, outName: `${entry.name}.glb` });
+      }
+    }
+  }
+  return out;
+}
+
+/** Tổng dung lượng thư mục, để báo đúng kích thước bản gốc dạng gltf rời. */
+function sizeOf(p) {
+  const st = statSync(p);
+  if (st.isFile()) return st.size;
+  let total = 0;
+  for (const e of readdirSync(p, { withFileTypes: true })) {
+    total += sizeOf(join(p, e.name));
+  }
+  return total;
+}
+
+for (const { key, sourcePath, outName } of listSources()) {
+  const config = MODELS[key];
   if (!config) {
-    console.log(`- bỏ qua ${file} (không có cấu hình, không được dùng trong scene)`);
+    console.log(`- bỏ qua ${key} (không có cấu hình, không được dùng trong scene)`);
     continue;
   }
 
-  const source = join(SRC_DIR, file);
-  const output = join(OUT_DIR, file);
+  const source = sourcePath;
+  const output = join(OUT_DIR, outName);
   const input = await prepare(source, config);
 
   const args = [
@@ -153,11 +219,12 @@ for (const file of readdirSync(SRC_DIR).filter((f) => f.endsWith(".glb"))) {
     if (input !== source) rmSync(input, { force: true });
   }
 
-  const before = statSync(source).size;
+  // Với bản gốc dạng gltf rời, đo cả thư mục (gltf + bin + textures).
+  const before = sizeOf(source.endsWith("scene.gltf") ? dirname(source) : source);
   const after = statSync(output).size;
   totalBefore += before;
   totalAfter += after;
-  console.log(`✔ ${file}: ${mb(before)} MB → ${mb(after)} MB`);
+  console.log(`✔ ${key}: ${mb(before)} MB → ${mb(after)} MB`);
 }
 
 console.log(`\nTổng: ${mb(totalBefore)} MB → ${mb(totalAfter)} MB`);

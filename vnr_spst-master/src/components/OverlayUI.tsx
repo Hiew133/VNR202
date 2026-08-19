@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useStore } from "@/store/useStore";
+import { useStore, WRONG_LOCK_MS } from "@/store/useStore";
 import { ROOMS, ARTIFACTS, PLACEABLE_ARTIFACTS, SHOWCASE_ROOM_ID } from "@/data/museumData";
-import { MODEL_CREDITS } from "@/data/credits";
+import { MODEL_CREDITS, LICENSE_NAME, LICENSE_URL } from "@/data/credits";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Play, Square, Volume2, VolumeX, Minus, Plus, CheckCircle2, Moon, Sun, Award, Info } from "lucide-react";
+import { X, Play, Square, Volume2, VolumeX, Minus, Plus, CheckCircle2, Moon, Sun, Award, Info, Lock } from "lucide-react";
 import { soundFx } from "@/utils/soundEffects";
+import { maskDates } from "@/utils/maskDates";
 
 export default function OverlayUI() {
   const [isListOpen, setIsListOpen] = useState(false);
@@ -34,6 +35,7 @@ export default function OverlayUI() {
   const lastWrongId = useStore((state) => state.lastWrongId);
   const clearWrong = useStore((state) => state.clearWrong);
   const wrongAttempts = useStore((state) => state.wrongAttempts);
+  const lockedUntil = useStore((state) => state.lockedUntil);
 
   const activeArtifact = activeArtifactId ? ARTIFACTS.find((a) => a.id === activeArtifactId) : null;
   const currentRoom = ROOMS.find((r) => r.id === activeRoomId) || ROOMS[0];
@@ -44,12 +46,6 @@ export default function OverlayUI() {
   const allPlaced = placedCount === totalToPlace;
   const isShowcaseRoom = activeRoomId === SHOWCASE_ROOM_ID;
   const formattedCounter = `${String(placedCount).padStart(2, "0")}/${String(totalToPlace).padStart(2, "0")}`;
-
-  // Xếp xong hết hiện vật của một phòng thì mới lộ giai đoạn của phòng đó -
-  // đoán ra phòng thuộc thời kỳ nào chính là phần chơi.
-  const roomSolved = ARTIFACTS
-    .filter((a) => a.roomId === activeRoomId)
-    .every((a) => placedIds.includes(a.id));
 
   // Bệ đang mở túi đồ, và danh sách hiện vật còn lại trong túi.
   const openSlotArtifact = openSlotId ? ARTIFACTS.find((a) => a.id === openSlotId) : null;
@@ -74,6 +70,16 @@ export default function OverlayUI() {
     return () => clearTimeout(t);
   }, [lastWrongId, clearWrong]);
 
+  // Đếm ngược thời gian khoá sau khi đặt sai. Chỉ chạy interval khi đang khoá,
+  // để không đánh thức React mỗi giây trong suốt phiên chơi.
+  const [now, setNow] = useState(() => Date.now());
+  const lockRemaining = Math.max(0, lockedUntil - now);
+  useEffect(() => {
+    if (lockedUntil <= Date.now()) return;
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, [lockedUntil]);
+
   const handlePlace = (artifactId: string) => {
     const ok = tryPlace(artifactId);
     if (isMuted) return;
@@ -95,6 +101,32 @@ export default function OverlayUI() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10 p-4 md:p-6 flex flex-col justify-between select-none">
+      {/* Khoá màn hình sau khi đặt sai. Lớp phủ này bắt mọi thao tác chuột nên
+          chặn luôn cả canvas 3D bên dưới, không riêng phần giao diện. */}
+      <AnimatePresence>
+        {lockRemaining > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="pointer-events-auto fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/85 md:backdrop-blur-sm cursor-not-allowed"
+          >
+            <Lock size={40} className="text-red-400 mb-4" />
+            <p className="text-lg font-bold font-serif text-red-200 mb-1">Sắp xếp sai hiện vật</p>
+            <p className="text-sm text-gray-400 mb-6">Tạm khoá để bạn xem lại gợi ý</p>
+            <div className="font-mono text-5xl font-bold text-yellow-400 tabular-nums">
+              {Math.ceil(lockRemaining / 1000)}s
+            </div>
+            <div className="mt-6 h-1 w-56 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full bg-yellow-500 transition-[width] duration-200 ease-linear"
+                style={{ width: `${(lockRemaining / WRONG_LOCK_MS) * 100}%` }}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Top Header Bar */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
         {/* Top-Left Pill / Expandable Checklist Dropdown */}
@@ -110,8 +142,9 @@ export default function OverlayUI() {
                 <span>
                   <strong className="text-yellow-400">{currentRoom.name}</strong> đã bày sẵn. Sang Phòng 1, 2, 3 để bắt đầu sắp xếp hiện vật.
                 </span>
-              ) : roomSolved ? (
-                // Đáp án: giai đoạn của phòng, chỉ lộ ra khi đã xếp xong.
+              ) : allPlaced ? (
+                // Đáp án: giai đoạn của phòng. Chỉ lộ khi đã xếp xong TOÀN BỘ
+                // bảo tàng - lộ theo từng phòng sẽ giúp suy ra các phòng còn lại.
                 <span>
                   <strong className="text-yellow-400">{currentRoom.name}</strong> hoàn thành —{" "}
                   <strong className="text-yellow-400">{currentRoom.theme}</strong>{" "}
@@ -119,7 +152,8 @@ export default function OverlayUI() {
                 </span>
               ) : (
                 <span>
-                  Bạn là nhân viên sắp xếp của <strong className="text-yellow-400">{currentRoom.name}</strong>. Xếp đủ hiện vật để biết phòng này thuộc giai đoạn nào.
+                  Xếp đủ hiện vật tất cả các phòng để biết{" "}
+                  <strong className="text-yellow-400">{currentRoom.name}</strong> thuộc giai đoạn nào.
                 </span>
               )}
             </div>
@@ -308,7 +342,7 @@ export default function OverlayUI() {
                   className="bg-red-900/40 border-b border-red-500/40 shrink-0"
                 >
                   <p className="px-5 py-2.5 text-xs text-red-200 leading-relaxed">
-                    <strong>{wrongArtifact.title}</strong> ({wrongArtifact.year}) không khớp gợi ý này. Đọc lại mốc thời gian và thử món khác nhé.
+                    <strong>{wrongArtifact.title}</strong> không khớp gợi ý này. Đọc kỹ lại gợi ý trên biển đồng rồi thử món khác nhé.
                   </p>
                 </motion.div>
               )}
@@ -329,10 +363,9 @@ export default function OverlayUI() {
                       : "bg-white/5 border-white/10 hover:bg-yellow-500/15 hover:border-yellow-500/40"
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium leading-snug">{item.title}</span>
-                    <span className="font-mono text-[11px] text-yellow-400/80 shrink-0">{item.year}</span>
-                  </div>
+                  {/* Chỉ hiện tên. Không kèm năm - biết niên đại là biết luôn
+                      hiện vật thuộc phòng nào, mất hết phần suy luận. */}
+                  <span className="text-sm font-medium leading-snug">{item.title}</span>
                 </button>
               ))}
             </div>
@@ -352,8 +385,13 @@ export default function OverlayUI() {
           >
             <div>
               <div className="flex items-center justify-between mb-4">
-                <span className="px-3 py-1 bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 rounded-full font-mono text-xs font-bold uppercase">
-                  Năm {activeArtifact.year}
+                {/* Niên đại bị che tới khi xếp xong toàn bộ bảo tàng. Đọc được
+                    một mốc thời gian là suy ra ngay phòng đó thuộc giai đoạn nào. */}
+                <span
+                  className="px-3 py-1 bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 rounded-full font-mono text-xs font-bold uppercase"
+                  title={allPlaced ? undefined : "Xếp đủ hiện vật để mở khoá niên đại"}
+                >
+                  {allPlaced ? activeArtifact.year : "Năm ??"}
                 </span>
                 <button
                   onClick={() => {
@@ -372,7 +410,7 @@ export default function OverlayUI() {
               <div className="w-16 h-1 bg-red-600 mb-4 rounded-full" />
 
               <p className="text-gray-300 text-sm leading-relaxed mb-6">
-                {activeArtifact.description}
+                {maskDates(activeArtifact.description, allPlaced)}
               </p>
             </div>
 
@@ -540,12 +578,12 @@ export default function OverlayUI() {
                       </a>
                       {", giấy phép "}
                       <a
-                        href={c.licenseUrl}
+                        href={LICENSE_URL}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline hover:text-yellow-400"
                       >
-                        {c.license}
+                        {LICENSE_NAME}
                       </a>
                       .
                     </div>
