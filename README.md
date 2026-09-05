@@ -13,6 +13,11 @@
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss&logoColor=white" />
 </p>
 
+<p align="center">
+  <b>🏛️ Vào bảo tàng: <a href="https://vnr-202-coral.vercel.app/">vnr-202-coral.vercel.app</a></b><br/>
+  <sub>Mở trình duyệt là vào thẳng, không cần cài gì.</sub>
+</p>
+
 ---
 
 ## Đây là gì
